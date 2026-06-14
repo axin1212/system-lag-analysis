@@ -54,9 +54,15 @@ The boundary penalty is applied when the best lag equals `max_lag_steps`; the re
 
 ## Stage 2: Prediction Gain Validation
 
-Stage 2 tests whether the best lag candidates improve out-of-sample prediction.
+Stage 2 tests whether the target has self-inertia and whether the best lag candidates improve out-of-sample prediction beyond that inertia.
 
 For large datasets, Stage 2 uses the most recent bounded supervised window by default (`--stage2-max-rows 20000`). The target-history baseline and candidate model must use the same rows so the gain is comparable.
+
+Naive persistence:
+
+```text
+y_hat(t) = y(t-1)
+```
 
 Target-history baseline:
 
@@ -144,9 +150,18 @@ Use `TimeSeriesSplit` by default. Do not shuffle rows.
 
 Primary metrics:
 
-- `delta_r2 = R2(candidate) - R2(baseline)`
-- `rmse_reduction = 1 - RMSE(candidate) / RMSE(baseline)`
-- `mae_reduction = 1 - MAE(candidate) / MAE(baseline)`
+- `y_only_delta_r2_vs_naive = R2(Y-only) - R2(naive)`
+- `y_only_rmse_reduction_vs_naive = 1 - RMSE(Y-only) / RMSE(naive)`
+- `y_only_mae_reduction_vs_naive = 1 - MAE(Y-only) / MAE(naive)`
+- `delta_r2 = R2(candidate) - R2(Y-only)`
+- `rmse_reduction = 1 - RMSE(candidate) / RMSE(Y-only)`
+- `mae_reduction = 1 - MAE(candidate) / MAE(Y-only)`
+
+Interpretation:
+
+- `Y-only >> naive`: target has strong inertia, continuity, or autoregressive memory.
+- `Y + X-lag >> Y-only`: external variables add independent early-prediction information.
+- `Y + X-lag ≈ Y-only`: external lag signal is weak, redundant, or already absorbed by target history.
 
 ## Verdicts
 
@@ -164,3 +179,5 @@ Possible lag, needs review:
 No stable actionable lag found:
 
 - Stage 1 is weak or Stage 2 consistently fails to improve prediction.
+
+Strong target inertia alone is not actionable control evidence. If `Y-only` is much stronger than naive but `Y + X-lag` does not improve over `Y-only`, report a strong self-inertial/autoregressive target and weak independent external lag contribution.
