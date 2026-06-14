@@ -21,7 +21,7 @@ Answer three questions:
 
 1. Does the system show an actionable lag structure?
 2. Which external variables lead the target, and by how many steps or minutes?
-3. Does adding those lagged variables improve prediction beyond target-history-only baselines?
+3. Does target history improve over naive persistence, and do lagged external variables add prediction gain beyond target-history-only baselines?
 
 Do not claim causality from correlation or model gain. Phrase conclusions as "leading evidence", "prediction gain", or "candidate early-control signal" unless a separate causal analysis supports stronger wording.
 
@@ -98,16 +98,21 @@ delta u_j(t-k) -> delta y(t)
 
 for `k = 1..max_lag_steps`, using Pearson, Spearman, mutual information, and rolling-window stability. This stage is designed to complete in a few minutes.
 
-Stage 2 validates whether the strongest lag candidates improve prediction:
+Stage 2 validates prediction in three layers:
 
 ```text
-Baseline:
+Naive persistence:
+y_hat(t) = y(t-1)
+
+Y-only baseline:
 y(t) = a + sum_i phi_i y(t-i) + sum_i psi_i delta y(t-i) + e(t)
 
-Candidate:
+Y + X-lag candidate:
 y(t) = a + sum_i phi_i y(t-i) + sum_i psi_i delta y(t-i)
      + sum_l beta_l u_j(t-l) + sum_l gamma_l delta u_j(t-l) + e(t)
 ```
+
+Use `Y-only vs naive` to judge whether the target is a strong inertial/autoregressive system. Use `Y + X-lag vs Y-only` to judge whether external variables add independent early-prediction information.
 
 It compares linear baselines (Ridge / ElasticNet) and lightweight nonlinear models (HistGradientBoosting / ExtraTrees). It first runs a small fixed grid for reproducible results, then uses Optuna TPE Bayesian optimization if available and time remains. If Optuna is not installed, it falls back to bounded random search.
 
@@ -143,5 +148,7 @@ Use "clearly actionable system lag" only when:
 Use "possible lag, needs review" when Stage 1 is strong but Stage 2 gain is weak, unstable, or not run.
 
 Use "no stable actionable lag found" when Stage 1 scores are weak or Stage 2 consistently fails to improve prediction.
+
+If `Y-only` strongly improves over naive but `Y + X-lag` does not improve over `Y-only`, describe the target as a strong self-inertial/autoregressive system, not as evidence that external variables provide actionable early-control signal.
 
 When recommending next steps, say whether the case should proceed to FDE's heavier `forecastability` workflow, deeper causal discovery, or manual process review.

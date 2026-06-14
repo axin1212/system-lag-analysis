@@ -49,9 +49,15 @@ class Stage2Record:
     variable: str
     best_lag: int
     lag_window: list[int]
+    naive_r2: float
+    naive_rmse: float
+    naive_mae: float
     baseline_r2: float
     baseline_rmse: float
     baseline_mae: float
+    y_only_delta_r2_vs_naive: float
+    y_only_rmse_reduction_vs_naive: float
+    y_only_mae_reduction_vs_naive: float
     best_model: str
     best_search: str
     candidate_r2: float
@@ -352,6 +358,32 @@ def cv_score_model(
     return regression_metrics(np.asarray(actuals), np.asarray(preds))
 
 
+def cv_score_naive_persistence(
+    x: pd.DataFrame,
+    y: pd.Series,
+    target: str,
+    splits: int,
+) -> dict[str, float]:
+    lag1_col = f"{target}_lag_1"
+    if lag1_col not in x.columns:
+        raise ValueError(f"Naive persistence requires `{lag1_col}` in supervised features.")
+    n = len(x)
+    if n < 80:
+        split = max(int(n * 0.7), 1)
+        split_iter = [(np.arange(0, split), np.arange(split, n))]
+    else:
+        usable_splits = min(splits, max(2, n // 80))
+        split_iter = TimeSeriesSplit(n_splits=usable_splits).split(x)
+    preds: list[float] = []
+    actuals: list[float] = []
+    for _, test_idx in split_iter:
+        if len(test_idx) == 0:
+            continue
+        preds.extend(x.iloc[test_idx][lag1_col].to_numpy().tolist())
+        actuals.extend(y.iloc[test_idx].to_numpy().tolist())
+    return regression_metrics(np.asarray(actuals), np.asarray(preds))
+
+
 def model_candidates(random_state: int) -> dict[str, tuple[Any, list[dict[str, Any]]]]:
     return {
         "ridge": (
@@ -560,6 +592,7 @@ def stage2_validate(
             y_candidate = y_candidate.loc[x_candidate.index]
 
         base_estimator = make_pipeline(StandardScaler(), Ridge(alpha=1.0))
+        naive = cv_score_naive_persistence(x_candidate, y_candidate, target, args.cv_splits)
         baseline = cv_score_model(base_estimator, x_candidate[base_cols], y_candidate, args.cv_splits)
 
         candidate_deadline = min(total_deadline, time.monotonic() + per_candidate_budget)
@@ -585,9 +618,15 @@ def stage2_validate(
                 variable=variable,
                 best_lag=best_lag,
                 lag_window=lag_window,
+                naive_r2=naive["r2"],
+                naive_rmse=naive["rmse"],
+                naive_mae=naive["mae"],
                 baseline_r2=baseline["r2"],
                 baseline_rmse=baseline["rmse"],
                 baseline_mae=baseline["mae"],
+                y_only_delta_r2_vs_naive=baseline["r2"] - naive["r2"],
+                y_only_rmse_reduction_vs_naive=1 - baseline["rmse"] / naive["rmse"] if naive["rmse"] else 0.0,
+                y_only_mae_reduction_vs_naive=1 - baseline["mae"] / naive["mae"] if naive["mae"] else 0.0,
                 best_model=model_name,
                 best_search=search_name,
                 candidate_r2=metrics["r2"],
@@ -756,9 +795,21 @@ def write_plotly_outputs(
     stage2_df = pd.DataFrame([asdict(r) for r in stage2])
     gain = go.Figure()
     if not stage2_df.empty:
+        gain.add_trace(
+            go.Bar(
+                x=stage2_df["variable"],
+                y=stage2_df["y_only_rmse_reduction_vs_naive"],
+                name="Y-only RMSE reduction vs naive",
+            )
+        )
         gain.add_trace(go.Bar(x=stage2_df["variable"], y=stage2_df["delta_r2"], name="delta R2"))
-        gain.add_trace(go.Bar(x=stage2_df["variable"], y=stage2_df["rmse_reduction"], name="RMSE reduction"))
-    gain.update_layout(title="Stage 2 Prediction Gain", xaxis_title="Variable", yaxis_title="Gain")
+        gain.add_trace(go.Bar(x=stage2_df["variable"], y=stage2_df["rmse_reduction"], name="X-lag RMSE reduction vs Y-only"))
+    gain.update_layout(
+        title="Stage 2 Prediction Gain",
+        xaxis_title="Variable",
+        yaxis_title="Gain",
+        barmode="group",
+    )
 
     overlay_vars = best_vars.head(args.html_top_overlay)["variable"].tolist()
     overlay = go.Figure()
@@ -869,7 +920,18 @@ def write_reports(
                 f"relation `{row['relation']}`, score `{float(row['combined_score']):.4f}`, "
                 f"stability `{float(row['stability']):.4f}`, boundary hit `{bool(row['boundary_hit'])}`."
             )
-    lines.extend(["", "## Stage 2 Prediction Gain", ""])
+    lines.extend(["", "## Stage 2 Target Inertia", ""])
+    if not stage2:
+        lines.append("Stage 2 did not run or did not produce valid model results.")
+    else:
+        first = stage2[0]
+        lines.append(
+            f"- Naive persistence RMSE `{first.naive_rmse:.4f}`, "
+            f"Y-only baseline RMSE `{first.baseline_rmse:.4f}`, "
+            f"Y-only RMSE reduction vs naive `{first.y_only_rmse_reduction_vs_naive:.4f}`, "
+            f"Y-only delta R2 vs naive `{first.y_only_delta_r2_vs_naive:.4f}`."
+        )
+    lines.extend(["", "## Stage 2 X-Lag Prediction Gain", ""])
     if not stage2:
         lines.append("Stage 2 did not run or did not produce valid model results.")
     else:

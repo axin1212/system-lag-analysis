@@ -6,6 +6,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from scripts import analyze_system_lag as lag
 from scripts.analyze_system_lag import Stage2Record, rolling_stability, write_plotly_outputs
 
 
@@ -16,6 +17,51 @@ def test_rolling_stability_keeps_dataframe_chunks() -> None:
     value = rolling_stability(left, right)
 
     assert 0.0 <= value <= 1.0
+
+
+def test_stage2_reports_y_only_gain_over_naive(monkeypatch) -> None:
+    data = pd.DataFrame(
+        {
+            "target": [float(i) for i in range(120)],
+            "flow_a": [float(i % 7) for i in range(120)],
+        }
+    )
+    candidates = pd.DataFrame(
+        [
+            {
+                "variable": "flow_a",
+                "lag": 2,
+                "relation": "level",
+                "combined_score": 0.5,
+                "stability": 0.5,
+                "boundary_hit": False,
+            }
+        ]
+    )
+    args = Namespace(
+        stage1_top_k=1,
+        stage2_budget_minutes=1,
+        lag_window_radius=1,
+        max_lag_steps=5,
+        history_lags=2,
+        stage2_max_rows=20000,
+        cv_splits=2,
+        random_state=42,
+    )
+    monkeypatch.setattr(
+        lag,
+        "evaluate_param_grid",
+        lambda *unused_args: ("ridge", "grid", {}, {"r2": 0.9, "rmse": 0.5, "mae": 0.4}),
+    )
+    monkeypatch.setattr(lag, "evaluate_random_or_optuna", lambda *unused_args: unused_args[-1])
+
+    records = lag.stage2_validate(data, "target", candidates, args)
+
+    assert len(records) == 1
+    record = records[0]
+    assert record.naive_rmse >= 0
+    assert record.y_only_rmse_reduction_vs_naive >= 0
+    assert record.y_only_delta_r2_vs_naive == record.baseline_r2 - record.naive_r2
 
 
 def test_lag_explorer_is_readable_overview_without_dropdown(tmp_path: Path) -> None:
@@ -55,9 +101,15 @@ def test_lag_explorer_is_readable_overview_without_dropdown(tmp_path: Path) -> N
             variable="flow_a",
             best_lag=2,
             lag_window=[1, 2, 3],
+            naive_r2=0.05,
+            naive_rmse=1.2,
+            naive_mae=0.9,
             baseline_r2=0.1,
             baseline_rmse=1.0,
             baseline_mae=0.8,
+            y_only_delta_r2_vs_naive=0.05,
+            y_only_rmse_reduction_vs_naive=0.1667,
+            y_only_mae_reduction_vs_naive=0.1111,
             best_model="ridge",
             best_search="grid",
             candidate_r2=0.13,
