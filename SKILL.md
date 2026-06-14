@@ -29,9 +29,20 @@ Do not claim causality from correlation or model gain. Phrase conclusions as "le
 
 1. Confirm downsampling frequency with the user.
 2. Ask for the data file, target column, candidate control columns, and optional timestamp column.
-3. Run the script in `scripts/analyze_system_lag.py`.
-4. Review `summary.md`, `lag_rankings.csv`, `results.json`, and the Plotly HTML pages under `plots/`.
-5. If the best lag is at `max_lag_steps`, tell the user the search hit the boundary and recommend rerunning with a larger lag range.
+3. Classify candidate variables before running: keep actionable inputs and external disturbances; exclude same-time analyzer sibling variables and other same-source state/quality measurements unless the user explicitly wants diagnostic coupling rather than actionable control lag.
+4. Run the script in `scripts/analyze_system_lag.py`.
+5. Review `summary.md`, `lag_rankings.csv`, `results.json`, and the Plotly HTML pages under `plots/`.
+6. If the best lag is at `max_lag_steps`, tell the user the search hit the boundary and recommend rerunning with a larger lag range.
+
+## Variable Eligibility
+
+Before passing values to `--controls`, separate variables into roles:
+
+- Actionable inputs: valve position, flow, air, feed, setpoint, manipulated variable. Use these for actionable system-lag analysis.
+- External disturbances: load, inlet composition, ambient condition. Use these for early prediction, but do not call them controllable drivers.
+- Diagnostic/state/quality variables: online analyzer outputs, lab-like quality indicators, downstream measurements, and same-time analyzer sibling variables collected from the same analyzer group as the target. Exclude these from actionable system-lag analysis by default.
+
+If an online analyzer produces five values and one is the target, do not put the other four same-time analyzer sibling values into `--controls` for control-lag screening. They can dominate Stage 1 or Stage 2 because they share measurement timing, sample path, analyzer delay, or common process state with the target. If the user asks to include them, run a separate diagnostic-coupling analysis and label the result as state coupling or diagnostic leading evidence, not an early-control signal.
 
 ## CLI
 

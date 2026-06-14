@@ -4,6 +4,16 @@
 
 Detect whether an industrial time-series system has actionable lag: external variables or target inertia that can support early prediction or early control.
 
+## Variable Eligibility
+
+The lag scan is only interpretable as actionable control evidence when `u_j` is an eligible leading variable. Classify variables before Stage 1:
+
+- Actionable inputs: manipulated variables, setpoints, flow rates, air/fuel/feed rates, valve positions.
+- External disturbances: upstream load, inlet composition, ambient or feed conditions. These may support early prediction but are not controllable drivers.
+- Diagnostic/state/quality variables: online analyzer sibling outputs, lab-like quality indicators, downstream states, or variables measured at the same time and source as the target.
+
+Exclude diagnostic/state/quality variables from actionable lag screening by default. They can create high lead-lag scores because of common measurement timing, shared analyzer delay, common process state, or target leakage through a sibling measurement. Even when only lagged values `u_j(t-k)` are used, these variables can mask true control-variable lag and should be reported as diagnostic coupling rather than early-control evidence.
+
 ## Stage 1: Lead-Lag Scan
 
 For target `y`, control variable `u_j`, and lag `k`:
