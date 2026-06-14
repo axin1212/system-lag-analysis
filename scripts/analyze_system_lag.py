@@ -75,6 +75,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-lag-steps", type=int, default=20)
     parser.add_argument("--stage1-top-k", type=int, default=20)
     parser.add_argument("--stage2-budget-minutes", type=float, default=15.0)
+    parser.add_argument("--stage2-max-rows", type=int, default=20000, help="Maximum recent rows used by Stage 2 model validation.")
     parser.add_argument("--history-lags", type=int, default=5)
     parser.add_argument("--lag-window-radius", type=int, default=2)
     parser.add_argument("--cv-splits", type=int, default=3)
@@ -97,6 +98,8 @@ def parse_args() -> argparse.Namespace:
         raise SystemExit("--downsample-rule requires --timestamp")
     if args.downsample_factor is not None and args.downsample_factor < 1:
         raise SystemExit("--downsample-factor must be >= 1")
+    if args.stage2_max_rows < 500:
+        raise SystemExit("--stage2-max-rows must be >= 500")
     return args
 
 
@@ -353,25 +356,25 @@ def model_candidates(random_state: int) -> dict[str, tuple[Any, list[dict[str, A
         "ridge": (
             make_pipeline(StandardScaler(), Ridge()),
             [
-                {"ridge__alpha": [0.01, 0.1, 1.0, 10.0, 100.0]},
+                {"ridge__alpha": [0.1, 1.0, 10.0, 100.0]},
             ],
         ),
         "elastic_net": (
             make_pipeline(StandardScaler(), ElasticNet(max_iter=5000, random_state=random_state)),
             [
-                {"elasticnet__alpha": [0.001, 0.01, 0.1, 1.0], "elasticnet__l1_ratio": [0.15, 0.5, 0.85]},
+                {"elasticnet__alpha": [0.01, 0.1, 1.0], "elasticnet__l1_ratio": [0.2, 0.7]},
             ],
         ),
         "hist_gradient_boosting": (
             HistGradientBoostingRegressor(random_state=random_state),
             [
                 {
-                    "learning_rate": [0.03, 0.08, 0.15],
-                    "max_iter": [120, 240],
+                    "learning_rate": [0.05, 0.12],
+                    "max_iter": [160],
                     "max_leaf_nodes": [15, 31],
-                    "min_samples_leaf": [30, 80],
-                    "l2_regularization": [0.001, 0.1],
-                    "max_bins": [128, 255],
+                    "min_samples_leaf": [40, 120],
+                    "l2_regularization": [0.01],
+                    "max_bins": [128],
                 }
             ],
         ),
@@ -380,9 +383,9 @@ def model_candidates(random_state: int) -> dict[str, tuple[Any, list[dict[str, A
             [
                 {
                     "n_estimators": [160, 320],
-                    "max_depth": [None, 6, 10],
-                    "min_samples_leaf": [4, 20],
-                    "min_samples_split": [8, 40],
+                    "max_depth": [6, 10],
+                    "min_samples_leaf": [8, 40],
+                    "min_samples_split": [20],
                     "max_features": [0.5, 1.0],
                     "bootstrap": [False],
                 }
@@ -546,17 +549,18 @@ def stage2_validate(
             for lag in range(best_lag - args.lag_window_radius, best_lag + args.lag_window_radius + 1)
             if 1 <= lag <= args.max_lag_steps
         ]
-        x_base, y_base, base_cols, _ = make_supervised_frame(
-            data, target, None, [], args.history_lags
-        )
-        base_estimator = make_pipeline(StandardScaler(), Ridge(alpha=1.0))
-        baseline = cv_score_model(base_estimator, x_base[base_cols], y_base, args.cv_splits)
-
-        x_candidate, y_candidate, _, _ = make_supervised_frame(
+        x_candidate, y_candidate, base_cols, _ = make_supervised_frame(
             data, target, variable, lag_window, args.history_lags
         )
         if len(x_candidate) < 50:
             continue
+        if len(x_candidate) > args.stage2_max_rows:
+            x_candidate = x_candidate.tail(args.stage2_max_rows)
+            y_candidate = y_candidate.loc[x_candidate.index]
+
+        base_estimator = make_pipeline(StandardScaler(), Ridge(alpha=1.0))
+        baseline = cv_score_model(base_estimator, x_candidate[base_cols], y_candidate, args.cv_splits)
+
         candidate_deadline = min(total_deadline, time.monotonic() + per_candidate_budget)
         best = evaluate_param_grid(
             x_candidate,
@@ -881,6 +885,7 @@ def main() -> None:
             "controls": controls,
             "max_lag_steps": args.max_lag_steps,
             "history_lags": args.history_lags,
+            "stage2_max_rows": args.stage2_max_rows,
             "stage1_seconds": round(stage1_seconds, 3),
             "stage2_seconds": round(stage2_seconds, 3),
             "verdict": verdict,

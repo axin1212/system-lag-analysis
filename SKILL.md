@@ -43,6 +43,7 @@ python ~/.codex/skills/system-lag-analysis/scripts/analyze_system_lag.py \
   --timestamp time \
   --downsample-rule 1min \
   --max-lag-steps 20 \
+  --stage2-max-rows 20000 \
   --stage2-budget-minutes 15 \
   --output-dir outputs/system_lag
 ```
@@ -67,6 +68,7 @@ Use `--no-downsample` only after the user explicitly chooses no downsampling.
 - `max_lag_steps`: 20
 - `stage1_top_k`: 20
 - `stage2_budget_minutes`: 15
+- `stage2_max_rows`: 20000 recent rows
 - `history_lags`: 5
 - `lag_window_radius`: 2
 - `cv_splits`: 3
@@ -97,6 +99,8 @@ y(t) = a + sum_i phi_i y(t-i) + sum_i psi_i delta y(t-i)
 ```
 
 It compares linear baselines (Ridge / ElasticNet) and lightweight nonlinear models (HistGradientBoosting / ExtraTrees). It first runs a small fixed grid for reproducible results, then uses Optuna TPE Bayesian optimization if available and time remains. If Optuna is not installed, it falls back to bounded random search.
+
+Stage 2 defaults to the most recent 20000 supervised rows so large 1-minute datasets remain bounded. Increase `--stage2-max-rows` only when the user explicitly wants deeper validation and accepts longer runtime.
 
 Read `references/methodology.md` when you need the detailed equations, search spaces, and interpretation rules.
 

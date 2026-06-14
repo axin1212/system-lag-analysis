@@ -46,6 +46,8 @@ The boundary penalty is applied when the best lag equals `max_lag_steps`; the re
 
 Stage 2 tests whether the best lag candidates improve out-of-sample prediction.
 
+For large datasets, Stage 2 uses the most recent bounded supervised window by default (`--stage2-max-rows 20000`). The target-history baseline and candidate model must use the same rows so the gain is comparable.
+
 Target-history baseline:
 
 ```text
