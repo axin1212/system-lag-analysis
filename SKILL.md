@@ -73,7 +73,7 @@ Use `--no-downsample` only after the user explicitly chooses no downsampling.
 - `lag_window_radius`: 2
 - `cv_splits`: 3
 - Heatmap HTML: top 50 variables
-- Detail HTML: top 20 variables
+- Detail HTML: top 20 variables shown together as overview curves
 - Overlay HTML: top 5 variables, capped to 3000 plotted points per series
 
 ## Method Summary
@@ -118,7 +118,7 @@ output-dir/
     plotly.min.js
 ```
 
-`index.html` is the entry page. `lag_explorer.html` contains the lead-lag heatmap and lag score explorer. `model_gain.html` contains Stage 2 model gain charts and shifted overlays.
+`index.html` is the entry page. `lag_explorer.html` contains the lead-lag heatmap, a plain-language metric guide, and top-variable combined-score curves without variable dropdowns. `model_gain.html` contains Stage 2 model gain charts and shifted overlays.
 
 ## Interpretation Rules
 

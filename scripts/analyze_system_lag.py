@@ -195,10 +195,11 @@ def rolling_stability(a: pd.Series, b: pd.Series, method: str = "pearson", n_win
     pair = pd.concat([a, b], axis=1).replace([np.inf, -np.inf], np.nan).dropna()
     if len(pair) < n_windows * 12:
         return 0.0
-    chunks = np.array_split(pair, n_windows)
+    boundaries = np.linspace(0, len(pair), n_windows + 1).astype(int)
     corrs: list[float] = []
     signs: list[int] = []
-    for chunk in chunks:
+    for start, end in zip(boundaries[:-1], boundaries[1:]):
+        chunk = pair.iloc[start:end]
         if len(chunk) < 8:
             continue
         corr = safe_corr(chunk.iloc[:, 0], chunk.iloc[:, 1], method)
@@ -623,6 +624,15 @@ def downsample_for_plot(df: pd.DataFrame, max_points: int) -> pd.DataFrame:
     return df.iloc[idx]
 
 
+METRIC_GUIDE_TEXT = (
+    "Metric Guide: abs Pearson = linear leading relationship; "
+    "abs Spearman = monotonic leading relationship; "
+    "MI norm = nonlinear dependency strength; "
+    "stability = robustness across time windows; "
+    "combined = weighted overall lead-lag score."
+)
+
+
 def write_plotly_outputs(
     output_dir: Path,
     data: pd.DataFrame,
@@ -655,73 +665,92 @@ def write_plotly_outputs(
     pivot = heatmap_data.pivot_table(index="variable", columns="lag", values="combined_score", aggfunc="max")
     pivot = pivot.reindex(index=heatmap_vars, columns=list(range(1, args.max_lag_steps + 1))).fillna(0)
 
-    heatmap = go.Figure(
-        data=go.Heatmap(
+    detail_vars = best_vars.head(args.html_top_detail)["variable"].tolist()
+    detail = go.Figure()
+    for variable in detail_vars:
+        sub = stage1[stage1["variable"] == variable].sort_values("lag")
+        if sub.empty:
+            continue
+        detail.add_trace(
+            go.Scatter(
+                x=sub["lag"],
+                y=sub["combined_score"],
+                mode="lines+markers",
+                name=f"{variable} combined",
+                hovertemplate=(
+                    f"variable={variable}<br>"
+                    "lag=%{x}<br>"
+                    "combined=%{y:.3f}<extra></extra>"
+                ),
+            )
+        )
+    detail.update_layout(
+        title="Top Variable Combined Score Curves",
+        xaxis_title="Lag step",
+        yaxis_title="Combined score",
+    )
+
+    explorer = make_subplots(
+        rows=2,
+        cols=1,
+        subplot_titles=("Lead-Lag Heatmap", "Top Variable Combined Score Curves"),
+        vertical_spacing=0.22,
+        row_heights=[0.58, 0.42],
+    )
+    explorer.add_trace(
+        go.Heatmap(
             z=pivot.to_numpy(),
             x=pivot.columns.tolist(),
             y=pivot.index.tolist(),
             colorscale="Viridis",
-            colorbar={"title": "score"},
-            hovertemplate="variable=%{y}<br>lag=%{x}<br>score=%{z:.3f}<extra></extra>",
-        )
+            colorbar={
+                "title": {"text": "combined<br>score"},
+                "x": 1.01,
+                "y": 0.78,
+                "len": 0.42,
+                "thickness": 16,
+            },
+            hovertemplate="variable=%{y}<br>lag=%{x}<br>combined=%{z:.3f}<extra></extra>",
+        ),
+        row=1,
+        col=1,
     )
-    heatmap.update_layout(title="Lead-Lag Heatmap", xaxis_title="Lag step", yaxis_title="Variable")
-
-    detail_vars = best_vars.head(args.html_top_detail)["variable"].tolist()
-    detail = go.Figure()
-    traces_per_var = 5
-    for idx, variable in enumerate(detail_vars):
-        sub = stage1[stage1["variable"] == variable].sort_values("lag")
-        visible = idx == 0
-        for col, name in (
-            ("pearson", "abs Pearson"),
-            ("spearman", "abs Spearman"),
-            ("mutual_info_norm", "MI norm"),
-            ("stability", "stability"),
-            ("combined_score", "combined"),
-        ):
-            detail.add_trace(
-                go.Scatter(
-                    x=sub["lag"],
-                    y=sub[col],
-                    mode="lines+markers",
-                    name=name,
-                    visible=visible,
-                )
-            )
-    buttons = []
-    for idx, variable in enumerate(detail_vars):
-        visible = [False] * (len(detail_vars) * traces_per_var)
-        for j in range(traces_per_var):
-            visible[idx * traces_per_var + j] = True
-        best = best_vars[best_vars["variable"] == variable].iloc[0]
-        buttons.append(
-            {
-                "label": variable,
-                "method": "update",
-                "args": [
-                    {"visible": visible},
-                    {"title": f"{variable}: best lag {int(best['lag'])}, score {float(best['combined_score']):.3f}"},
-                ],
-            }
-        )
-    detail.update_layout(
-        title="Lag Score Explorer",
-        xaxis_title="Lag step",
-        yaxis_title="Score",
-        updatemenus=[{"buttons": buttons, "direction": "down"}] if buttons else [],
-    )
-
-    explorer = make_subplots(rows=2, cols=1, subplot_titles=("Lead-Lag Heatmap", "Lag Score Explorer"))
-    for tr in heatmap.data:
-        explorer.add_trace(tr, row=1, col=1)
     for tr in detail.data:
         explorer.add_trace(tr, row=2, col=1)
     explorer.update_layout(
-        height=950,
+        height=max(900, 520 + 22 * len(heatmap_vars)),
+        width=1280,
         title="System Lag Explorer",
-        updatemenus=detail.layout.updatemenus,
+        margin={"l": 170, "r": 190, "t": 155, "b": 110},
+        legend={
+            "orientation": "h",
+            "yanchor": "top",
+            "y": -0.13,
+            "xanchor": "left",
+            "x": 0.0,
+        },
+        annotations=[
+            *list(explorer.layout.annotations),
+            {
+                "text": METRIC_GUIDE_TEXT,
+                "xref": "paper",
+                "yref": "paper",
+                "x": 0,
+                "y": 1.12,
+                "showarrow": False,
+                "align": "left",
+                "font": {"size": 12, "color": "#334155"},
+                "bgcolor": "#f8fafc",
+                "bordercolor": "#cbd5e1",
+                "borderwidth": 1,
+                "borderpad": 6,
+            },
+        ],
     )
+    explorer.update_xaxes(title_text="Lag step", row=1, col=1)
+    explorer.update_yaxes(title_text="Variable", automargin=True, row=1, col=1)
+    explorer.update_xaxes(title_text="Lag step", row=2, col=1)
+    explorer.update_yaxes(title_text="Combined score", row=2, col=1)
     explorer.write_html(plots_dir / "lag_explorer.html", include_plotlyjs="directory", full_html=True)
 
     stage2_df = pd.DataFrame([asdict(r) for r in stage2])
