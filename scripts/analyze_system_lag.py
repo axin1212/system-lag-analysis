@@ -803,7 +803,7 @@ def write_plotly_outputs(
             )
         )
         gain.add_trace(go.Bar(x=stage2_df["variable"], y=stage2_df["delta_r2"], name="delta R2"))
-        gain.add_trace(go.Bar(x=stage2_df["variable"], y=stage2_df["rmse_reduction"], name="X-lag RMSE reduction vs Y-only"))
+        gain.add_trace(go.Bar(x=stage2_df["variable"], y=stage2_df["rmse_reduction"], name="full RMSE reduction vs Y-only"))
     gain.update_layout(
         title="Stage 2 Prediction Gain",
         xaxis_title="Variable",

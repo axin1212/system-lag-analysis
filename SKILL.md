@@ -107,12 +107,12 @@ y_hat(t) = y(t-1)
 Y-only baseline:
 y(t) = a + sum_i phi_i y(t-i) + sum_i psi_i delta y(t-i) + e(t)
 
-Y + X-lag candidate:
+Full model (FDE name; Y history plus X-lag candidate):
 y(t) = a + sum_i phi_i y(t-i) + sum_i psi_i delta y(t-i)
      + sum_l beta_l u_j(t-l) + sum_l gamma_l delta u_j(t-l) + e(t)
 ```
 
-Use `Y-only vs naive` to judge whether the target is a strong inertial/autoregressive system. Use `Y + X-lag vs Y-only` to judge whether external variables add independent early-prediction information.
+Use `Y-only vs naive` to judge whether the target is a strong inertial/autoregressive system. Use `full vs Y-only` to judge whether external variables add independent early-prediction information.
 
 It compares linear baselines (Ridge / ElasticNet) and lightweight nonlinear models (HistGradientBoosting / ExtraTrees). It first runs a small fixed grid for reproducible results, then uses Optuna TPE Bayesian optimization if available and time remains. If Optuna is not installed, it falls back to bounded random search.
 
@@ -149,6 +149,6 @@ Use "possible lag, needs review" when Stage 1 is strong but Stage 2 gain is weak
 
 Use "no stable actionable lag found" when Stage 1 scores are weak or Stage 2 consistently fails to improve prediction.
 
-If `Y-only` strongly improves over naive but `Y + X-lag` does not improve over `Y-only`, describe the target as a strong self-inertial/autoregressive system, not as evidence that external variables provide actionable early-control signal.
+If `Y-only` strongly improves over naive but `full` does not improve over `Y-only`, describe the target as a strong self-inertial/autoregressive system, not as evidence that external variables provide actionable early-control signal.
 
 When recommending next steps, say whether the case should proceed to FDE's heavier `forecastability` workflow, deeper causal discovery, or manual process review.
