@@ -1,0 +1,6 @@
+interface:
+  display_name: "System Lag Analysis"
+  short_description: "Analyze system lag for early prediction and control"
+  default_prompt: "Use $system-lag-analysis to analyze whether my process data has actionable system lag for early prediction."
+policy:
+  allow_implicit_invocation: true
