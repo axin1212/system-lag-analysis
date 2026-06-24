@@ -157,6 +157,13 @@ Primary metrics:
 - `rmse_reduction = 1 - RMSE(full) / RMSE(Y-only)`
 - `mae_reduction = 1 - MAE(full) / MAE(Y-only)`
 
+Report outputs should display the absolute model R2 values as well as gains:
+
+- `R2(naive)` for persistence.
+- `R2(Y-only)` for target-history baseline.
+- `R2(full)` for target history plus lagged external candidate.
+- `delta_r2` for the incremental external lag contribution.
+
 Interpretation:
 
 - `Y-only >> naive`: target has strong inertia, continuity, or autoregressive memory.

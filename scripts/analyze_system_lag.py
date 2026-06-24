@@ -795,6 +795,10 @@ def write_plotly_outputs(
     stage2_df = pd.DataFrame([asdict(r) for r in stage2])
     gain = go.Figure()
     if not stage2_df.empty:
+        gain.add_trace(go.Bar(x=stage2_df["variable"], y=stage2_df["naive_r2"], name="Naive persistence R2"))
+        gain.add_trace(go.Bar(x=stage2_df["variable"], y=stage2_df["baseline_r2"], name="Y-only baseline R2"))
+        gain.add_trace(go.Bar(x=stage2_df["variable"], y=stage2_df["candidate_r2"], name="Full model R2"))
+        gain.add_trace(go.Bar(x=stage2_df["variable"], y=stage2_df["delta_r2"], name="delta R2"))
         gain.add_trace(
             go.Bar(
                 x=stage2_df["variable"],
@@ -802,12 +806,11 @@ def write_plotly_outputs(
                 name="Y-only RMSE reduction vs naive",
             )
         )
-        gain.add_trace(go.Bar(x=stage2_df["variable"], y=stage2_df["delta_r2"], name="delta R2"))
         gain.add_trace(go.Bar(x=stage2_df["variable"], y=stage2_df["rmse_reduction"], name="full RMSE reduction vs Y-only"))
     gain.update_layout(
-        title="Stage 2 Prediction Gain",
+        title="Stage 2 Prediction Gain and Model R2",
         xaxis_title="Variable",
-        yaxis_title="Gain",
+        yaxis_title="R2 / gain",
         barmode="group",
     )
 
@@ -926,8 +929,10 @@ def write_reports(
     else:
         first = stage2[0]
         lines.append(
-            f"- Naive persistence RMSE `{first.naive_rmse:.4f}`, "
-            f"Y-only baseline RMSE `{first.baseline_rmse:.4f}`, "
+            f"- Naive persistence R2 `{first.naive_r2:.4f}`, RMSE `{first.naive_rmse:.4f}`."
+        )
+        lines.append(
+            f"- Y-only baseline R2 `{first.baseline_r2:.4f}`, RMSE `{first.baseline_rmse:.4f}`, "
             f"Y-only RMSE reduction vs naive `{first.y_only_rmse_reduction_vs_naive:.4f}`, "
             f"Y-only delta R2 vs naive `{first.y_only_delta_r2_vs_naive:.4f}`."
         )
@@ -937,7 +942,8 @@ def write_reports(
     else:
         for rec in stage2[:10]:
             lines.append(
-                f"- `{rec.variable}`: delta R2 `{rec.delta_r2:.4f}`, "
+                f"- `{rec.variable}`: Full model R2 `{rec.candidate_r2:.4f}`, "
+                f"Y-only baseline R2 `{rec.baseline_r2:.4f}`, delta R2 `{rec.delta_r2:.4f}`, "
                 f"RMSE reduction `{rec.rmse_reduction:.4f}`, model `{rec.best_model}`, search `{rec.best_search}`."
             )
     (output_dir / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
