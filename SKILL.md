@@ -134,7 +134,7 @@ output-dir/
     plotly.min.js
 ```
 
-`index.html` is the entry page. `lag_explorer.html` contains the lead-lag heatmap, a plain-language metric guide, and top-variable combined-score curves without variable dropdowns. `model_gain.html` contains Stage 2 model gain charts and shifted overlays.
+`index.html` is the entry page. `lag_explorer.html` contains the lead-lag heatmap, a plain-language metric guide, and top-variable combined-score curves without variable dropdowns. `model_gain.html` contains Stage 2 model gain charts, including naive persistence R2, Y-only baseline R2, full model R2, delta R2, RMSE reductions, and shifted overlays. `summary.md` must also surface these Stage 2 R2 values so users can judge model fit without opening JSON.
 
 ## Interpretation Rules
 
